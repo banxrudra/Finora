@@ -1,0 +1,187 @@
+{% extends "base.html" %}
+{% from "partials/macros.html" import icon %}
+{% block title %}Budgets{% endblock %}
+
+{% macro status_pill(b) -%}
+{%- if b.status == 'over' -%}<span class="status-pill status-over">{{ icon('octagon-alert') }} Over by {{ (-b.remaining)|money(false) }}</span>
+{%- elif b.status == 'warning' -%}<span class="status-pill status-warning">{{ icon('triangle-alert') }} Near limit</span>
+{%- else -%}<span class="status-pill status-ok">{{ icon('circle-check') }} On track</span>{%- endif -%}
+{%- endmacro %}
+
+{% block content %}
+<div class="page-head">
+  <div>
+    <h1>Budgets</h1>
+    <p>Monthly spending limits that repeat every month. Alerts fire when you cross your threshold.</p>
+  </div>
+  <div class="page-head__actions">
+    <div class="month-nav" aria-label="Month">
+      <a href="{{ url_for('budgets.index', month=prev_month.strftime('%Y-%m'), sort=sort) }}" aria-label="Previous month">{{ icon('chevron-left') }}</a>
+      <span>{{ month|dt('%B %Y') }}</span>
+      {% if not is_current %}<a href="{{ url_for('budgets.index', month=next_month.strftime('%Y-%m'), sort=sort) }}" aria-label="Next month">{{ icon('chevron-right') }}</a>
+      {% else %}<a class="page-link is-disabled" aria-disabled="true" style="min-width:30px;height:30px">{{ icon('chevron-right') }}</a>{% endif %}
+    </div>
+    <button class="btn btn-primary" data-modal-open="budget-modal" data-title="Create budget">{{ icon('plus') }} Add budget</button>
+  </div>
+</div>
+
+{% set total = status.total_budget %}{% set spent = status.total_spent %}
+{% set used = ((spent / total * 100)|round(1)) if total else 0 %}
+<section class="grid grid-4">
+  <div class="card summary-tile">
+    <span class="kpi-icon navy">{{ icon('target') }}</span>
+    <div><div class="label">Total budget</div><div class="value">{{ total|money }}</div></div>
+  </div>
+  <div class="card summary-tile">
+    <span class="kpi-icon orange">{{ icon('trending-down') }}</span>
+    <div><div class="label">Total spent</div><div class="value">{{ spent|money }}</div></div>
+    <div class="aside"><span class="badge {{ 'badge-neg' if used >= 100 else ('badge-warn' if used >= 80 else 'badge-pos') }}">{{ used }}%</span></div>
+  </div>
+  <div class="card summary-tile">
+    <span class="kpi-icon green">{{ icon('wallet') }}</span>
+    <div><div class="label">Remaining</div><div class="value" style="color: {{ 'var(--neg)' if total - spent < 0 else 'var(--pos)' }}">{{ (total - spent)|money }}</div></div>
+  </div>
+  <div class="card summary-tile">
+    <span class="kpi-icon blue">{{ icon('bell-ring') }}</span>
+    <div><div class="label">Alerts</div><div class="value">{{ status.over_count + status.warning_count }}</div></div>
+    <div class="aside small muted">{{ status.over_count }} over · {{ status.warning_count }} near</div>
+  </div>
+</section>
+
+{% set o = status.overall %}
+<article class="card overall-card mt">
+  {% if o %}
+  <div>
+    <div style="display:flex;align-items:center;gap:12px">
+      <span class="cat-icon cat-icon-lg" style="--c: #0f766e">{{ icon('wallet') }}</span>
+      <div>
+        <div class="budget-card-name">Overall monthly budget</div>
+        <div class="budget-card-sub">All expenses in {{ month|dt('%B') }} · alert at {{ o.threshold }}%</div>
+      </div>
+    </div>
+  </div>
+  <div style="display:flex;align-items:center;gap:8px">
+    {{ status_pill(o) }}
+    <button class="icon-btn icon-btn-sm" data-modal-open="budget-modal" data-title="Edit overall budget" data-action="{{ url_for('budgets.update', bid=o.id) }}"
+            data-payload='{"category_id": "overall", "amount": "{{ o.amount }}", "alert_threshold": {{ o.threshold }}}' aria-label="Edit overall budget">{{ icon('pencil') }}</button>
+    <button class="icon-btn icon-btn-sm" data-confirm="{{ url_for('budgets.delete', bid=o.id) }}" data-confirm-title="Remove overall budget?" data-confirm-text="Your category budgets will be kept." data-confirm-label="Remove" aria-label="Delete overall budget">{{ icon('trash-2') }}</button>
+  </div>
+  <div class="meter {{ 'is-over' if o.status == 'over' else ('is-warning' if o.status == 'warning') }}" role="progressbar" aria-valuenow="{{ o.pct }}" aria-valuemin="0" aria-valuemax="100" aria-label="Overall budget used"><span style="width: {{ o.bar_pct }}%"></span></div>
+  <div class="overall-figures" style="grid-column: 1 / -1">
+    <div><div class="label">Spent</div><div class="v">{{ o.spent|money }}</div></div>
+    <div><div class="label">Limit</div><div class="v">{{ o.amount|money }}</div></div>
+    <div><div class="label">{{ 'Over by' if o.remaining < 0 else 'Left to spend' }}</div><div class="v" style="color: {{ 'var(--neg)' if o.remaining < 0 else 'var(--pos)' }}">{{ (o.remaining|abs)|money }}</div></div>
+    <div><div class="label">Used</div><div class="v">{{ o.pct }}%</div></div>
+  </div>
+  {% else %}
+  <div style="display:flex;align-items:center;gap:12px">
+    <span class="cat-icon cat-icon-lg" style="--c: #0f766e">{{ icon('wallet') }}</span>
+    <div>
+      <div class="budget-card-name">Set an overall monthly budget</div>
+      <div class="budget-card-sub">One limit across all expenses – the simplest way to stay on track.</div>
+    </div>
+  </div>
+  <button class="btn btn-secondary" data-modal-open="budget-modal" data-title="Create overall budget" data-payload='{"category_id": "overall"}'>{{ icon('plus') }} Set overall budget</button>
+  {% endif %}
+</article>
+
+<div class="sortbar">
+  <h2 style="font-size:15px;margin-right:auto">Category budgets <span class="muted" style="font-weight:500">· {{ items|length }}</span></h2>
+  <span class="muted">Sort by</span>
+  <div class="segmented">
+    <a class="{{ 'is-active' if sort == 'usage' }}" href="{{ url_for('budgets.index', month=month.strftime('%Y-%m'), sort='usage') }}">Most used</a>
+    <a class="{{ 'is-active' if sort == 'name' }}" href="{{ url_for('budgets.index', month=month.strftime('%Y-%m'), sort='name') }}">Name</a>
+    <a class="{{ 'is-active' if sort == 'amount' }}" href="{{ url_for('budgets.index', month=month.strftime('%Y-%m'), sort='amount') }}">Amount</a>
+  </div>
+</div>
+
+<section class="grid grid-3">
+  {% for b in items %}
+  <article class="card budget-card{{ ' is-over' if b.status == 'over' }}">
+    <div class="budget-card-top">
+      <span class="cat-icon" style="--c: {{ b.color }}">{{ icon(b.icon) }}</span>
+      <div style="min-width:0">
+        <div class="budget-card-name">{{ b.name }}</div>
+        <div class="budget-card-sub">Limit {{ b.amount|money(false) }} / month</div>
+      </div>
+      <div class="actions">
+        <button class="icon-btn icon-btn-sm" data-modal-open="budget-modal" data-title="Edit budget" data-action="{{ url_for('budgets.update', bid=b.id) }}"
+                data-payload='{"category_id": "{{ b.category.id }}", "amount": "{{ b.amount }}", "alert_threshold": {{ b.threshold }}}' aria-label="Edit {{ b.name }} budget">{{ icon('pencil') }}</button>
+        <button class="icon-btn icon-btn-sm" data-confirm="{{ url_for('budgets.delete', bid=b.id) }}" data-confirm-title="Remove {{ b.name }} budget?" data-confirm-text="Transactions are not affected." data-confirm-label="Remove" aria-label="Delete {{ b.name }} budget">{{ icon('trash-2') }}</button>
+      </div>
+    </div>
+    <div class="budget-amounts">
+      <div><strong>{{ b.spent|money }}</strong> <span>spent</span></div>
+      <span class="badge {{ 'badge-neg' if b.status == 'over' else ('badge-warn' if b.status == 'warning' else 'badge-neutral') }}">{{ b.pct }}%</span>
+    </div>
+    <div class="meter {{ 'is-over' if b.status == 'over' else ('is-warning' if b.status == 'warning') }}" role="progressbar" aria-valuenow="{{ b.pct }}" aria-valuemin="0" aria-valuemax="100" aria-label="{{ b.name }} budget used"><span style="width: {{ b.bar_pct }}%"></span></div>
+    <div class="budget-foot">
+      {{ status_pill(b) }}
+      <span class="left">{% if b.remaining >= 0 %}{{ b.remaining|money }} left{% else %}Limit {{ b.amount|money(false) }}{% endif %}</span>
+    </div>
+  </article>
+  {% endfor %}
+  <button class="card add-tile" data-modal-open="budget-modal" data-title="Create budget">
+    <span>{{ icon('circle-plus') }}<strong>Add category budget</strong><span class="small">{% set free = expense_cats|length - items|length %}{{ free }} categor{{ 'y' if free == 1 else 'ies' }} without a limit</span></span>
+  </button>
+</section>
+
+<dialog class="modal modal-sm" id="budget-modal" aria-labelledby="budget-modal-title">
+  <form method="post" action="{{ url_for('budgets.create') }}" data-create-action="{{ url_for('budgets.create') }}"
+        data-defaults='{"alert_threshold": 80}' style="display:contents" id="budget-form">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    <div class="modal-head">
+      <span class="modal-icon">{{ icon('target') }}</span>
+      <div><h3 id="budget-modal-title" data-modal-title>Create budget</h3><p>Limits reset at the start of every month.</p></div>
+      <button type="button" class="icon-btn icon-btn-sm" data-modal-close aria-label="Close">{{ icon('x') }}</button>
+    </div>
+    <div class="modal-body">
+      <div class="field">
+        <label class="label" for="b-cat">Applies to</label>
+        <select class="select" id="b-cat" name="category_id" required>
+          <option value="overall" data-budgeted="{{ 1 if o else 0 }}">Overall – all expenses</option>
+          <optgroup label="Expense categories">
+          {% for c in expense_cats %}<option value="{{ c.id }}" data-budgeted="{{ 1 if c.id in budgeted else 0 }}">{{ c.name }}</option>{% endfor %}
+          </optgroup>
+        </select>
+        <span class="hint" data-budget-hint hidden>Categories that already have a budget are disabled.</span>
+      </div>
+      <div class="field">
+        <label class="label" for="b-amount">Monthly limit</label>
+        <div class="input-prefix"><span>{{ currency_symbol }}</span><input class="input num" id="b-amount" name="amount" type="number" min="1" step="0.01" required placeholder="5000.00"></div>
+      </div>
+      <div class="field">
+        <label class="label" for="b-threshold">Alert me at <output id="b-threshold-out" style="color:var(--text);font-weight:600">80</output>% of the limit</label>
+        <input id="b-threshold" name="alert_threshold" type="range" min="50" max="100" step="5" value="80" style="accent-color: var(--accent)"
+               oninput="document.getElementById('b-threshold-out').value = this.value">
+      </div>
+    </div>
+    <div class="modal-foot">
+      <button type="button" class="btn btn-secondary" data-modal-close>Cancel</button>
+      <button type="submit" class="btn btn-primary">Save budget</button>
+    </div>
+  </form>
+</dialog>
+{% endblock %}
+
+{% block scripts %}
+<script>
+  // Disable categories that already have a budget (except the one being edited).
+  document.addEventListener("DOMContentLoaded", function () {
+    var dlg = document.getElementById("budget-modal");
+    dlg.addEventListener("modal:open", function (e) {
+      var editing = !!e.detail.action;
+      var current = e.detail.payload ? JSON.parse(e.detail.payload).category_id : null;
+      var sel = document.getElementById("b-cat");
+      var firstFree = null;
+      Array.prototype.forEach.call(sel.options, function (o) {
+        o.disabled = o.dataset.budgeted === "1" && String(o.value) !== String(current);
+        if (!o.disabled && firstFree === null) firstFree = o.value;
+      });
+      if (!current || sel.selectedOptions[0].disabled) sel.value = firstFree;
+      document.querySelector("[data-budget-hint]").hidden = editing;
+      document.getElementById("b-threshold-out").value = document.getElementById("b-threshold").value;
+    });
+  });
+</script>
+{% endblock %}

@@ -1,0 +1,97 @@
+{% extends "base.html" %}
+{% from "partials/macros.html" import icon %}
+{% block title %}Categories{% endblock %}
+
+{% block content %}
+<div class="page-head">
+  <div>
+    <h1>Categories</h1>
+    <p>Organise transactions your way. Colours and icons carry through every chart and report.</p>
+  </div>
+  <div class="page-head__actions">
+    <button class="btn btn-primary" data-modal-open="cat-modal" data-title="New category" data-payload='{"kind": "{{ tab }}"}'>{{ icon('plus') }} New category</button>
+  </div>
+</div>
+
+<nav class="tabs" aria-label="Category type">
+  <a class="tab{{ ' is-active' if tab == 'expense' }}" href="{{ url_for('categories.index', tab='expense') }}">{{ icon('arrow-up-right') }} Expense <span class="count">{{ rows.expense|length }}</span></a>
+  <a class="tab{{ ' is-active' if tab == 'income' }}" href="{{ url_for('categories.index', tab='income') }}">{{ icon('arrow-down-left') }} Income <span class="count">{{ rows.income|length }}</span></a>
+</nav>
+
+<section class="grid grid-3">
+  {% for r in rows[tab] %}
+  {% set c = r.c %}
+  <article class="card cat-card">
+    <span class="cat-icon cat-icon-lg" style="--c: {{ c.color }}">{{ icon(c.icon) }}</span>
+    <div class="cat-card-main">
+      <div class="cat-card-name">{{ c.name }}</div>
+      <div class="cat-card-sub">{{ r.count }} transaction{{ 's' if r.count != 1 }} · <a class="link-more" style="padding:0;font-size:12px" href="{{ url_for('transactions.index', category=c.id) }}">View</a></div>
+    </div>
+    <div class="cat-card-val">
+      <strong>{{ r.month|money(false) }}</strong>
+      <span>this month</span>
+    </div>
+    <div class="actions">
+      <button class="icon-btn icon-btn-sm" data-modal-open="cat-modal" data-title="Edit category" data-action="{{ url_for('categories.update', cid=c.id) }}"
+              data-payload='{{ {"name": c.name, "kind": c.kind, "icon": c.icon, "color": c.color}|tojson_safe }}' aria-label="Edit {{ c.name }}">{{ icon('pencil') }}</button>
+      <button class="icon-btn icon-btn-sm" data-confirm="{{ url_for('categories.delete', cid=c.id) }}" data-confirm-title="Delete “{{ c.name }}”?"
+              data-confirm-text="{{ r.count }} transaction{{ 's' if r.count != 1 }} will become uncategorised and any budget for this category will be removed." aria-label="Delete {{ c.name }}">{{ icon('trash-2') }}</button>
+    </div>
+  </article>
+  {% endfor %}
+  <button class="card add-tile" style="min-height:76px" data-modal-open="cat-modal" data-title="New category" data-payload='{"kind": "{{ tab }}"}'>
+    <span style="display:flex;align-items:center;gap:8px">{{ icon('circle-plus') }}<strong>Add {{ tab }} category</strong></span>
+  </button>
+</section>
+
+<dialog class="modal" id="cat-modal" aria-labelledby="cat-modal-title">
+  <form method="post" action="{{ url_for('categories.create') }}" data-create-action="{{ url_for('categories.create') }}" data-cat-form
+        data-defaults='{"kind": "expense", "icon": "tag", "color": "{{ colors[0] }}"}' style="display:contents">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    <div class="modal-head">
+      <span class="modal-icon">{{ icon('shapes') }}</span>
+      <div><h3 id="cat-modal-title" data-modal-title>New category</h3><p>Pick a name, icon and colour.</p></div>
+      <button type="button" class="icon-btn icon-btn-sm" data-modal-close aria-label="Close">{{ icon('x') }}</button>
+    </div>
+    <div class="modal-body">
+      <div class="card" data-cat-preview style="display:flex;align-items:center;gap:12px;padding:12px 14px;box-shadow:none;background:var(--surface-2);margin-bottom:18px">
+        <span class="cat-icon">{{ icon('tag') }}</span>
+        <div><div style="font-weight:600" data-preview-name>New category</div><div class="small muted">Preview</div></div>
+      </div>
+      <div class="form-row">
+        <div class="field">
+          <label class="label" for="c-name">Name</label>
+          <input class="input" id="c-name" name="name" required minlength="2" maxlength="40" placeholder="e.g. Pets" autocomplete="off">
+        </div>
+        <div class="field">
+          <span class="label" id="c-kind-label">Type</span>
+          <div class="segmented segmented-lg" role="radiogroup" aria-labelledby="c-kind-label">
+            <input type="radio" name="kind" value="expense" id="c-exp" class="seg-expense"><label for="c-exp">Expense</label>
+            <input type="radio" name="kind" value="income" id="c-inc" class="seg-income"><label for="c-inc">Income</label>
+          </div>
+        </div>
+      </div>
+      <div class="field">
+        <span class="label">Icon</span>
+        <div class="icon-grid" role="radiogroup" aria-label="Icon">
+          {% for i in icons %}
+          <input type="radio" name="icon" value="{{ i }}" id="ic-{{ i }}"><label for="ic-{{ i }}" title="{{ i|replace('-', ' ') }}">{{ icon(i, 'icon-sm') }}<span class="sr-only">{{ i }}</span></label>
+          {% endfor %}
+        </div>
+      </div>
+      <div class="field">
+        <span class="label">Colour</span>
+        <div class="color-grid" role="radiogroup" aria-label="Colour">
+          {% for col in colors %}
+          <input type="radio" name="color" value="{{ col }}" id="col-{{ loop.index }}"><label for="col-{{ loop.index }}" style="--c: {{ col }}"><span class="sr-only">{{ col }}</span></label>
+          {% endfor %}
+        </div>
+      </div>
+    </div>
+    <div class="modal-foot">
+      <button type="button" class="btn btn-secondary" data-modal-close>Cancel</button>
+      <button type="submit" class="btn btn-primary">Save category</button>
+    </div>
+  </form>
+</dialog>
+{% endblock %}

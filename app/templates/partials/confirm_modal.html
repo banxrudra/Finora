@@ -1,0 +1,17 @@
+{% from "partials/macros.html" import icon %}
+<dialog class="modal modal-sm" id="confirm-modal" aria-labelledby="confirm-title">
+  <form method="post" style="display:contents">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    <div class="modal-head">
+      <span class="modal-icon danger">{{ icon('trash-2') }}</span>
+      <div>
+        <h3 id="confirm-title" data-confirm-title>Are you sure?</h3>
+        <p data-confirm-text>This action cannot be undone.</p>
+      </div>
+    </div>
+    <div class="modal-foot" style="margin-top:20px">
+      <button type="button" class="btn btn-secondary" data-modal-close>Cancel</button>
+      <button type="submit" class="btn btn-danger" data-confirm-btn>Delete</button>
+    </div>
+  </form>
+</dialog>

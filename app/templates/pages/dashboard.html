@@ -1,0 +1,255 @@
+{% extends "base.html" %}
+{% from "partials/macros.html" import icon, cat_icon, delta, method_icon, money_split %}
+{% block title %}Dashboard{% endblock %}
+{% block crumbs %}{{ icon('chevron-right') }}<span>Overview</span>{% endblock %}
+
+{% block topbar_range %}
+<div class="dropdown" data-dropdown>
+  <button class="range-btn" data-dropdown-toggle aria-haspopup="true" aria-expanded="false">
+    {{ icon('calendar') }}<span class="range-label">{{ rng.label }}</span>
+    <span class="range-dates hide-md">{{ rng.start|dt('%d %b') }} – {{ rng.end|dt('%d %b %Y') }}</span>
+    {{ icon('chevron-down') }}
+  </button>
+  <div class="menu" data-menu hidden>
+    <form method="post" action="{{ url_for('main.set_range') }}">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      {% for key, label in range_options %}
+      <button class="menu-item{{ ' is-active' if key == rng.key }}" name="range" value="{{ key }}" type="submit" data-allow-multi>
+        {{ label }}{% if key == rng.key %}<span class="check">{{ icon('check', 'icon-sm') }}</span>{% endif %}
+      </button>
+      {% endfor %}
+    </form>
+  </div>
+</div>
+<button class="btn btn-primary" data-modal-open="tx-modal" data-title="Add transaction">{{ icon('plus') }}<span class="hide-md">Add</span></button>
+{% endblock %}
+
+{% block content %}
+<div class="page-head">
+  <div>
+    <h1>Welcome back, {{ current_user.first_name }}</h1>
+    <p>Your financial overview for <strong class="text-2" style="font-weight:600">{{ rng.label|lower }}</strong> · {{ rng.start|dt('%d %b') }} – {{ rng.end|dt('%d %b %Y') }}</p>
+  </div>
+  <div class="page-head__actions">
+    <a class="btn btn-secondary" href="{{ url_for('reports.index') }}">{{ icon('file-text') }} View report</a>
+    <a class="btn btn-secondary" href="{{ url_for('transactions.export', start=rng.start.isoformat(), end=rng.end.isoformat()) }}">{{ icon('download') }} Export CSV</a>
+  </div>
+</div>
+
+{% if not has_data %}
+<div class="card welcome" style="margin-bottom:18px">
+  <div style="position:relative;z-index:1">
+    <h2>Let's set up your finances</h2>
+    <p>Add your first transaction, or load 12 months of realistic sample data to explore every chart and report right away.</p>
+  </div>
+  <div class="actions">
+    <form method="post" action="{{ url_for('main.load_demo') }}">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <button class="btn btn-secondary" type="submit">{{ icon('sparkles') }} Load sample data</button>
+    </form>
+    <button class="btn btn-primary" data-modal-open="tx-modal" data-title="Add transaction">{{ icon('plus') }} Add transaction</button>
+  </div>
+</div>
+{% endif %}
+
+<!-- KPIs -->
+<section class="grid grid-4" aria-label="Key figures">
+  {% set kpis = [
+    ('Total balance', 'balance', summary.balance, 'wallet', 'navy', 'savings'),
+    ('Income', 'income', summary.income, 'arrow-down-left', 'green', 'income'),
+    ('Expenses', 'expense', summary.expense, 'arrow-up-right', 'orange', 'expense'),
+    ('Net savings', 'savings', summary.savings, 'piggy-bank', 'blue', 'savings'),
+  ] %}
+  {% for label, key, value, ic, tone, spark_tone in kpis %}
+  <article class="card kpi">
+    <div class="kpi-top">
+      <span class="kpi-icon {{ tone }}">{{ icon(ic) }}</span>
+      <span class="kpi-label">{{ label }}</span>
+      {{ delta(summary.delta[key], invert=(key == 'expense')) }}
+    </div>
+    <div class="kpi-value">{{ money_split(value) }}</div>
+    <div class="kpi-foot">
+      {% if key == 'balance' %}All-time net position
+      {% elif key == 'savings' %}Savings rate <strong class="text-2">{{ summary.savings_rate }}%</strong> of income
+      {% else %}vs {{ summary.prev_label.start|dt('%d %b') }} – {{ summary.prev_label.end|dt('%d %b %Y') }}{% endif %}
+    </div>
+    <div class="kpi-spark"><canvas data-chart="sparkline" data-tone="{{ spark_tone }}" data-values='{"values": {{ sparks[key]|tojson_safe }}}' aria-hidden="true"></canvas></div>
+  </article>
+  {% endfor %}
+</section>
+
+<!-- Charts row -->
+<section class="grid grid-main mt">
+  <article class="card card-fill">
+    <div class="card-head">
+      <div>
+        <h2>Income vs expenses</h2>
+        <div class="card-sub">Monthly totals · last {{ monthly.labels|length }} months</div>
+      </div>
+      <div class="legend">
+        <span><i class="sw" style="--c: var(--series-income)"></i>Income</span>
+        <span><i class="sw" style="--c: var(--series-expense)"></i>Expenses</span>
+      </div>
+    </div>
+    <div class="card-body">
+      {% set m_in = monthly.income|sum %}{% set m_ex = monthly.expense|sum %}
+      <div class="headline-figure" style="margin-bottom:12px">
+        <strong>{{ (m_in - m_ex)|money }}</strong>
+        <span class="small muted">net saved over {{ monthly.labels|length }} months · {{ m_in|money(false) }} in, {{ m_ex|money(false) }} out</span>
+      </div>
+      <div class="chart-box grow"><canvas data-chart="incomeExpense" data-source="d-monthly" role="img" aria-label="Bar chart of monthly income and expenses"></canvas></div>
+    </div>
+  </article>
+
+  <article class="card">
+    <div class="card-head">
+      <div>
+        <h2>Spending by category</h2>
+        <div class="card-sub">{{ rng.label }}</div>
+      </div>
+      <a class="link-more" href="{{ url_for('analytics.index') }}">Details {{ icon('chevron-right') }}</a>
+    </div>
+    <div class="card-body">
+      {% if cats %}
+      {% set split = 6 if cats|length <= 6 else 5 %}{% set top = cats[:split] %}{% set rest = cats[split:] %}
+      <div class="donut-wrap">
+        <canvas data-chart="donut" data-source="d-cats" role="img" aria-label="Doughnut chart of spending by category"></canvas>
+        <div class="donut-center"><div><strong>{{ summary.expense|money(false) }}</strong><span>Total spent</span></div></div>
+      </div>
+      <div class="cat-list">
+        {% for c in top %}
+        <div class="cat-row">
+          <span class="cat-icon cat-icon-sm" style="--c: {{ c.color }}">{{ icon(c.icon) }}</span>
+          <div class="cat-row-main"><div class="cat-row-name">{{ c.name }}</div><div class="cat-row-sub">{{ c.count }} transaction{{ 's' if c.count != 1 }}</div></div>
+          <div class="cat-row-val"><strong>{{ c.amount|money(false) }}</strong><span>{{ c.pct }}%</span></div>
+        </div>
+        {% endfor %}
+        {% if rest %}
+        <div class="cat-row">
+          <span class="cat-icon cat-icon-sm" style="--c: #94a3b8">{{ icon('ellipsis') }}</span>
+          <div class="cat-row-main"><div class="cat-row-name">Other</div><div class="cat-row-sub">{{ rest|length }} categories combined</div></div>
+          <div class="cat-row-val"><strong>{{ (rest|sum(attribute='amount'))|money(false) }}</strong><span>{{ '%.1f'|format(rest|sum(attribute='pct')) }}%</span></div>
+        </div>
+        {% endif %}
+      </div>
+      {% else %}
+      <div class="empty"><div class="empty-icon">{{ icon('chart-pie') }}</div><h3>No spending yet</h3><p>Expenses in this period will be broken down by category here.</p></div>
+      {% endif %}
+    </div>
+  </article>
+</section>
+
+<section class="grid grid-main mt">
+  <article class="card">
+    <div class="card-head">
+      <div>
+        <h2>Spending trend</h2>
+        <div class="card-sub">Cumulative spend, {{ rng.label|lower }} vs previous period</div>
+      </div>
+      <div class="legend">
+        <span><i class="ln" style="--c: var(--series-expense)"></i>{{ rng.label }}</span>
+        <span><i class="ln dash" style="--c: var(--text-3)"></i>Previous period</span>
+      </div>
+    </div>
+    <div class="card-body">
+      <div class="chart-box h-240"><canvas data-chart="trend" data-source="d-trend" role="img" aria-label="Line chart of cumulative spending"></canvas></div>
+    </div>
+  </article>
+
+  <article class="card">
+    <div class="card-head">
+      <div>
+        <h2>Budget progress</h2>
+        <div class="card-sub">{{ budgets.month|dt('%B %Y') }}</div>
+      </div>
+      <a class="link-more" href="{{ url_for('budgets.index') }}">Manage {{ icon('chevron-right') }}</a>
+    </div>
+    <div class="card-body">
+      {% if budgets.rows %}
+      <div class="budget-mini">
+        {% for b in budgets.rows[:5] %}
+        <div class="budget-mini-row">
+          <div class="top">
+            <span class="cat-icon cat-icon-sm" style="--c: {{ b.color }}">{{ icon(b.icon) }}</span>
+            <span class="name">{{ b.name }}</span>
+            <span class="vals"><strong>{{ b.spent|money(false) }}</strong> / {{ b.amount|money(false) }}</span>
+          </div>
+          <div class="meter meter-sm {{ 'is-over' if b.status == 'over' else ('is-warning' if b.status == 'warning') }}" role="progressbar" aria-valuenow="{{ b.pct }}" aria-valuemin="0" aria-valuemax="100" aria-label="{{ b.name }} budget used"><span style="width: {{ b.bar_pct }}%"></span></div>
+        </div>
+        {% endfor %}
+      </div>
+      {% else %}
+      <div class="empty" style="padding:24px 8px"><div class="empty-icon">{{ icon('target') }}</div><h3>No budgets yet</h3><p>Set monthly limits per category and we'll warn you before you overspend.</p>
+        <a class="btn btn-secondary btn-sm" href="{{ url_for('budgets.index') }}">{{ icon('plus') }} Create budget</a></div>
+      {% endif %}
+    </div>
+  </article>
+</section>
+
+<section class="grid grid-main mt">
+  <article class="card" style="overflow:hidden">
+    <div class="card-head" style="padding-bottom:14px">
+      <div>
+        <h2>Recent transactions</h2>
+        <div class="card-sub">Latest activity across all accounts</div>
+      </div>
+      <a class="link-more" href="{{ url_for('transactions.index') }}">View all {{ icon('chevron-right') }}</a>
+    </div>
+    {% if recent %}
+    <div class="table-wrap">
+      <table class="table table-stack">
+        <thead><tr><th>Transaction</th><th>Category</th><th>Date</th><th>Method</th><th class="t-right">Amount</th></tr></thead>
+        <tbody>
+        {% for t in recent %}
+          <tr>
+            <td class="c-main"><div class="tx-cell">{{ cat_icon(t.category) }}<div style="min-width:0"><div class="tx-title">{{ t.title }}</div><div class="tx-sub">{{ t.kind|title }}</div></div></div></td>
+            <td class="c-cat t-muted">{{ t.category.name if t.category else 'Uncategorised' }}</td>
+            <td class="c-date t-muted">{{ t.date|dt }}</td>
+            <td class="c-method"><span class="method">{{ method_icon(t.method) }}{{ t.method }}</span></td>
+            <td class="c-meta">{{ t.category.name if t.category else 'Uncategorised' }} · {{ t.date|dt('%d %b') }}</td>
+            <td class="c-amount t-right"><span class="amount {{ 'amount-pos' if t.kind == 'income' else 'amount-neg' }}">{{ t.signed_amount|money(sign=true) }}</span></td>
+          </tr>
+        {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    {% else %}
+    <div class="empty"><div class="empty-icon">{{ icon('receipt') }}</div><h3>No transactions yet</h3><p>Your latest income and expenses will show up here.</p></div>
+    {% endif %}
+  </article>
+
+  <article class="card">
+    <div class="card-head">
+      <div>
+        <h2>Financial insights</h2>
+        <div class="card-sub">Generated from your data</div>
+      </div>
+      <span class="badge badge-info">{{ icon('sparkles') }} Auto</span>
+    </div>
+    <div class="card-body">
+      <div class="insights" style="grid-template-columns:1fr">
+        {% for i in insights[:4] %}
+        <div class="insight">
+          <span class="insight-icon tone-{{ i.tone }}">{{ icon(i.icon) }}</span>
+          <div><div class="insight-title">{{ i.title }}</div><div class="insight-text">{{ i.text }}</div></div>
+        </div>
+        {% endfor %}
+      </div>
+    </div>
+  </article>
+</section>
+
+<script type="application/json" id="d-monthly">{"labels": {{ monthly.labels|tojson_safe }}, "income": {{ monthly.income|tojson_safe }}, "expense": {{ monthly.expense|tojson_safe }}}</script>
+{% set split = 6 if cats|length <= 6 else 5 %}{% set top5 = cats[:split] %}{% set rest5 = cats[split:] %}
+<script type="application/json" id="d-cats">{
+  "labels": {{ (top5|map(attribute='name')|list + (['Other'] if rest5 else []))|tojson_safe }},
+  "values": {{ (top5|map(attribute='amount')|list + ([rest5|sum(attribute='amount')] if rest5 else []))|tojson_safe }},
+  "colors": {{ (top5|map(attribute='color')|list + (['#94a3b8'] if rest5 else []))|tojson_safe }}
+}</script>
+<script type="application/json" id="d-trend">{"labels": {{ trend.labels|tojson_safe }}, "current": {{ trend.current|tojson_safe }}, "previous": {{ trend.previous|tojson_safe }}, "currentLabel": {{ rng.label|tojson }}, "previousLabel": "Previous period"}</script>
+{% endblock %}
+
+{% block scripts %}
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+<script src="{{ url_for('static', filename='js/charts.js') }}"></script>
+{% endblock %}

@@ -1,0 +1,25 @@
+{% extends "auth/layout.html" %}
+{% from "partials/macros.html" import icon %}
+{% block title %}Sign in{% endblock %}
+{% block form %}
+<h1>Welcome back</h1>
+<p>Sign in to see your financial overview.</p>
+{% if errors.form %}<div class="form-alert" role="alert">{{ icon('circle-alert') }}{{ errors.form }}</div>{% endif %}
+<form method="post" novalidate>
+  <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+  <div class="field">
+    <label class="label" for="email">Email</label>
+    <div class="input-icon">{{ icon('mail') }}<input class="input" id="email" name="email" type="email" autocomplete="email" required value="{{ form.email or '' }}" placeholder="you@example.com" autofocus></div>
+  </div>
+  <div class="field">
+    <label class="label" for="password">Password</label>
+    <div class="input-icon">{{ icon('lock') }}<input class="input" id="password" name="password" type="password" autocomplete="current-password" required placeholder="••••••••"></div>
+  </div>
+  <div class="auth-row">
+    <label class="checkbox"><input type="checkbox" name="remember" value="1"> Keep me signed in</label>
+  </div>
+  <button class="btn btn-primary btn-block btn-lg" type="submit">Sign in {{ icon('arrow-right') }}</button>
+</form>
+<div class="demo-hint">{{ icon('sparkles') }}<span>Exploring? Use the demo account <code>demo@finora.app</code> / <code>demo1234</code></span></div>
+<p class="auth-alt">New to Finora? <a href="{{ url_for('auth.register') }}">Create an account</a></p>
+{% endblock %}

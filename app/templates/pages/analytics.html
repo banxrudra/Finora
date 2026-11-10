@@ -1,0 +1,145 @@
+{% extends "base.html" %}
+{% from "partials/macros.html" import icon %}
+{% block title %}Analytics{% endblock %}
+
+{% block content %}
+{% set p = payload %}
+<div class="page-head">
+  <div>
+    <h1>Analytics</h1>
+    <p>Trends across the last {{ p.months }} months, built from your transactions and budgets.</p>
+  </div>
+  <div class="page-head__actions">
+    <div class="segmented" role="tablist" aria-label="Period">
+      {% for v, l in [('3', '3 months'), ('6', '6 months'), ('12', '12 months')] %}
+      <a class="{{ 'is-active' if period == v }}" href="{{ url_for('analytics.index', period=v) }}"{% if period == v %} aria-current="true"{% endif %}>{{ l }}</a>
+      {% endfor %}
+    </div>
+    <a class="btn btn-secondary" href="{{ url_for('reports.index', preset='year' if period == '12' else 'quarter') }}">{{ icon('file-text') }} Report</a>
+  </div>
+</div>
+
+{% set t = p.totals %}
+{% set rates = p.savings_rate|reject('none')|list %}
+<section class="grid grid-4">
+  <div class="card summary-tile"><span class="kpi-icon green">{{ icon('arrow-down-left') }}</span><div><div class="label">Total income</div><div class="value">{{ t.income|money(false) }}</div></div></div>
+  <div class="card summary-tile"><span class="kpi-icon orange">{{ icon('arrow-up-right') }}</span><div><div class="label">Total expenses</div><div class="value">{{ t.expense|money(false) }}</div></div></div>
+  <div class="card summary-tile"><span class="kpi-icon blue">{{ icon('piggy-bank') }}</span><div><div class="label">Net savings</div><div class="value">{{ t.net|money(false) }}</div></div></div>
+  <div class="card summary-tile"><span class="kpi-icon navy">{{ icon('percent') }}</span><div><div class="label">Avg. savings rate</div><div class="value">{{ ((rates|sum / rates|length)|round(1)) if rates else 0 }}%</div></div></div>
+</section>
+
+<section class="grid grid-main mt">
+  <article class="card card-fill">
+    <div class="card-head">
+      <div><h2>Income vs expenses</h2><div class="card-sub">Monthly totals</div></div>
+      <div class="legend"><span><i class="sw" style="--c: var(--series-income)"></i>Income</span><span><i class="sw" style="--c: var(--series-expense)"></i>Expenses</span></div>
+    </div>
+    <div class="card-body"><div class="chart-box grow"><canvas data-chart="incomeExpense" data-source="a-ie" role="img" aria-label="Monthly income and expenses"></canvas></div></div>
+  </article>
+
+  <article class="card">
+    <div class="card-head">
+      <div><h2>Expenses by category</h2><div class="card-sub">{{ p.categories|length }} categories · {{ p.months }} months</div></div>
+    </div>
+    <div class="card-body">
+      {% if p.categories %}
+      <div class="donut-wrap" style="width:180px;height:180px">
+        <canvas data-chart="donut" data-source="a-cat" role="img" aria-label="Expenses by category"></canvas>
+        <div class="donut-center"><div><strong style="font-size:17px">{{ t.expense|compact }}</strong><span>Total</span></div></div>
+      </div>
+      <div class="cat-list">
+        {% set split = 6 if p.categories|length <= 6 else 5 %}
+        {% for c in p.categories[:split] %}
+        <div class="cat-row" style="padding:7px 0">
+          <span class="swatch" style="--c: {{ c.color }}"></span>
+          <div class="cat-row-main"><div class="cat-row-name">{{ c.name }}</div></div>
+          <div class="cat-row-val" style="display:flex;gap:10px;align-items:baseline"><strong>{{ c.amount|money(false) }}</strong><span style="width:40px">{{ c.pct }}%</span></div>
+        </div>
+        {% endfor %}
+        {% set rest = p.categories[split:] %}
+        {% if rest %}
+        <div class="cat-row" style="padding:7px 0">
+          <span class="swatch" style="--c: #94a3b8"></span>
+          <div class="cat-row-main"><div class="cat-row-name">Other ({{ rest|length }})</div></div>
+          <div class="cat-row-val" style="display:flex;gap:10px;align-items:baseline"><strong>{{ (rest|sum(attribute='amount'))|money(false) }}</strong><span style="width:40px">{{ '%.1f'|format(rest|sum(attribute='pct')) }}%</span></div>
+        </div>
+        {% endif %}
+      </div>
+      {% else %}
+      <div class="empty"><div class="empty-icon">{{ icon('chart-pie') }}</div><h3>No expenses</h3><p>Nothing to break down in this period.</p></div>
+      {% endif %}
+    </div>
+  </article>
+</section>
+
+<section class="grid grid-2 mt">
+  <article class="card">
+    <div class="card-head">
+      <div><h2>Spending trend</h2><div class="card-sub">Monthly spend with 3-month moving average</div></div>
+      <div class="legend"><span><i class="ln" style="--c: var(--series-expense)"></i>Monthly spend</span><span><i class="ln dash" style="--c: var(--text-3)"></i>3-mo average</span></div>
+    </div>
+    <div class="card-body"><div class="chart-box h-280"><canvas data-chart="expenseAvg" data-source="a-trend" role="img" aria-label="Monthly spending trend"></canvas></div></div>
+  </article>
+
+  <article class="card">
+    <div class="card-head">
+      <div><h2>Monthly savings</h2><div class="card-sub">Income minus expenses · hover for savings rate</div></div>
+      <div class="legend"><span><i class="sw" style="--c: var(--series-savings)"></i>Saved</span><span><i class="sw" style="--c: var(--neg)"></i>Overspent</span></div>
+    </div>
+    <div class="card-body"><div class="chart-box h-280"><canvas data-chart="savings" data-source="a-sav" role="img" aria-label="Monthly savings"></canvas></div></div>
+  </article>
+</section>
+
+<section class="grid grid-main mt">
+  <article class="card">
+    <div class="card-head">
+      <div><h2>Budget vs actual</h2><div class="card-sub">{{ p.budget.month }} · category limits vs spending so far</div></div>
+      <div class="legend"><span><i class="sw" style="--c: var(--series-muted)"></i>Budget</span><span><i class="sw" style="--c: var(--series-income)"></i>Spent</span><span><i class="sw" style="--c: var(--neg)"></i>Over budget</span></div>
+    </div>
+    <div class="card-body">
+      {% if p.budget.labels %}
+      <div class="chart-box" style="height: {{ [p.budget.labels|length * 44 + 40, 220]|max }}px"><canvas data-chart="budgetVsActual" data-source="a-bva" role="img" aria-label="Budget versus actual spending"></canvas></div>
+      {% else %}
+      <div class="empty"><div class="empty-icon">{{ icon('target') }}</div><h3>No category budgets</h3><p>Create budgets to compare limits against what you actually spend.</p>
+        <a class="btn btn-secondary btn-sm" href="{{ url_for('budgets.index') }}">{{ icon('plus') }} Create budget</a></div>
+      {% endif %}
+    </div>
+  </article>
+
+  <article class="card">
+    <div class="card-head"><div><h2>Income sources</h2><div class="card-sub">Share of total income</div></div></div>
+    <div class="card-body">
+      {% if p.income_categories %}
+      <div class="budget-mini">
+        {% for c in p.income_categories %}
+        <div class="budget-mini-row">
+          <div class="top"><span class="swatch" style="--c: {{ c.color }}"></span><span class="name">{{ c.name }}</span><span class="vals"><strong>{{ c.amount|money(false) }}</strong> · {{ c.pct }}%</span></div>
+          <div class="meter meter-sm"><span style="width: {{ c.pct }}%; background: {{ c.color }}"></span></div>
+        </div>
+        {% endfor %}
+      </div>
+      {% else %}
+      <div class="empty"><div class="empty-icon">{{ icon('banknote') }}</div><h3>No income recorded</h3><p>Income for this period will be broken down here.</p></div>
+      {% endif %}
+      <div class="insight" style="margin-top:20px">
+        <span class="insight-icon tone-good">{{ icon('scale') }}</span>
+        <div><div class="insight-title">Income covers {{ ((t.income / t.expense * 100)|round(0)|int) if t.expense else 0 }}% of expenses</div>
+          <div class="insight-text">Across {{ t.count }} transactions in the last {{ p.months }} months.</div></div>
+      </div>
+    </div>
+  </article>
+</section>
+
+{% set split = 6 if p.categories|length <= 6 else 5 %}
+{% set top = p.categories[:split] %}{% set rest = p.categories[split:] %}
+<script type="application/json" id="a-ie">{"labels": {{ p.labels|tojson_safe }}, "income": {{ p.income|tojson_safe }}, "expense": {{ p.expense|tojson_safe }}}</script>
+<script type="application/json" id="a-cat">{"labels": {{ (top|map(attribute='name')|list + (['Other'] if rest else []))|tojson_safe }}, "values": {{ (top|map(attribute='amount')|list + ([rest|sum(attribute='amount')] if rest else []))|tojson_safe }}, "colors": {{ (top|map(attribute='color')|list + (['#94a3b8'] if rest else []))|tojson_safe }}}</script>
+<script type="application/json" id="a-trend">{"labels": {{ p.labels|tojson_safe }}, "expense": {{ p.expense|tojson_safe }}, "avg": {{ p.expense_avg|tojson_safe }}}</script>
+<script type="application/json" id="a-sav">{"labels": {{ p.labels|tojson_safe }}, "savings": {{ p.savings|tojson_safe }}, "rates": {{ p.savings_rate|tojson_safe }}}</script>
+<script type="application/json" id="a-bva">{{ p.budget|tojson_safe }}</script>
+{% endblock %}
+
+{% block scripts %}
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+<script src="{{ url_for('static', filename='js/charts.js') }}"></script>
+{% endblock %}

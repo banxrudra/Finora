@@ -1,0 +1,112 @@
+<!doctype html>
+<html lang="en" data-theme="light" data-theme-pref="{{ current_user.theme if current_user.is_authenticated else 'light' }}">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="csrf-token" content="{{ csrf_token() }}">
+  <title>{% block title %}Dashboard{% endblock %} · Finora</title>
+  <link rel="icon" href="{{ url_for('static', filename='img/favicon.svg') }}" type="image/svg+xml">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;550;600;650;700&display=swap" rel="stylesheet">
+  <script>
+    (function () {
+      var p = document.documentElement.dataset.themePref || "light";
+      var dark = p === "dark" || (p === "system" && window.matchMedia("(prefers-color-scheme: dark)").matches);
+      document.documentElement.dataset.theme = dark ? "dark" : "light";
+    })();
+  </script>
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/app.css') }}">
+  {% block head %}{% endblock %}
+</head>
+{% from "partials/macros.html" import icon %}
+<body data-currency="{{ current_user.currency if current_user.is_authenticated else 'INR' }}" data-symbol="{{ currency_symbol or '₹' }}">
+{% block body %}
+<div class="app">
+  {% include "partials/sidebar.html" %}
+  <div class="scrim" data-nav-close></div>
+  <div class="main">
+<header class="topbar">
+  <button class="icon-btn topbar__menu" data-nav-open aria-label="Open menu">{{ icon('menu') }}</button>
+  <div class="topbar__titles">
+    <div class="topbar__title">{{ self.title() }}</div>
+    <nav class="breadcrumbs" aria-label="Breadcrumb">
+      <a href="{{ url_for('main.dashboard') }}">Finora</a>
+      {% block crumbs %}{{ icon('chevron-right') }}<span>{{ self.title() }}</span>{% endblock %}
+    </nav>
+  </div>
+
+  <div class="topbar__actions">
+    {% block topbar_range %}
+    <button class="btn btn-primary" data-modal-open="tx-modal" data-title="Add transaction">{{ icon('plus') }}<span class="hide-md">Add transaction</span></button>
+    {% endblock %}
+
+    <div class="dropdown" data-dropdown>
+      <button class="icon-btn" data-dropdown-toggle aria-haspopup="true" aria-expanded="false" aria-label="Notifications ({{ notifications|length }})">
+        {{ icon('bell') }}{% if notifications %}<span class="dot"></span>{% endif %}
+      </button>
+      <div class="menu menu-wide" data-menu hidden>
+        <div class="notif-head">
+          <strong>Notifications</strong>
+          {% if notifications %}<span class="badge badge-neutral">{{ notifications|length }} new</span>{% endif %}
+        </div>
+        {% if notifications %}
+        <div class="notif-list">
+          {% for n in notifications %}
+          <a class="notif" href="{{ url_for(n.href + '.index') }}">
+            <span class="notif-icon tone-{{ n.tone }}">{{ icon(n.icon) }}</span>
+            <span><span class="notif-title" style="display:block">{{ n.title }}</span><span class="notif-text" style="display:block">{{ n.text }}</span></span>
+          </a>
+          {% endfor %}
+        </div>
+        {% else %}
+        <div class="notif-empty">{{ icon('bell-ring') }}You're all caught up.<br>Budget alerts and unusual expenses appear here.</div>
+        {% endif %}
+      </div>
+    </div>
+
+    <button class="icon-btn" data-theme-toggle data-url="{{ url_for('settings.theme') }}" aria-label="Toggle dark mode" title="Toggle theme">
+      <span data-theme-icon="light">{{ icon('moon') }}</span><span data-theme-icon="dark" hidden>{{ icon('sun') }}</span>
+    </button>
+
+    <div class="dropdown" data-dropdown>
+      <button class="avatar" data-dropdown-toggle aria-haspopup="true" aria-expanded="false" aria-label="Account menu">{{ current_user.initials }}</button>
+      <div class="menu" data-menu hidden>
+        <div class="menu-head"><strong>{{ current_user.name }}</strong><span>{{ current_user.email }}</span></div>
+        <div class="menu-sep"></div>
+        <a class="menu-item" href="{{ url_for('settings.index', tab='profile') }}">{{ icon('user-round', 'icon-sm') }} Profile</a>
+        <a class="menu-item" href="{{ url_for('settings.index', tab='preferences') }}">{{ icon('sliders-horizontal', 'icon-sm') }} Preferences</a>
+        <a class="menu-item" href="{{ url_for('settings.index', tab='security') }}">{{ icon('shield-check', 'icon-sm') }} Security</a>
+        <div class="menu-sep"></div>
+        <form method="post" action="{{ url_for('auth.logout') }}">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+          <button class="menu-item danger" type="submit">{{ icon('log-out', 'icon-sm') }} Sign out</button>
+        </form>
+      </div>
+    </div>
+  </div>
+</header>
+<script>
+  // Sync theme icon before first paint of icons
+  document.querySelectorAll("[data-theme-icon]").forEach(function (el) {
+    el.hidden = el.dataset.themeIcon !== document.documentElement.dataset.theme;
+  });
+</script>
+    <main class="content" id="content">
+      {% block content %}{% endblock %}
+    </main>
+  </div>
+</div>
+{% include "partials/tx_modal.html" %}
+{% include "partials/confirm_modal.html" %}
+{% endblock %}
+
+<div class="toasts" aria-live="polite"></div>
+{% with messages = get_flashed_messages(with_categories=true) %}
+<script type="application/json" data-flash>{{ messages|tojson }}</script>
+{% endwith %}
+<script src="https://unpkg.com/lucide@0.460.0/dist/umd/lucide.min.js"></script>
+{% block scripts %}{% endblock %}
+<script src="{{ url_for('static', filename='js/app.js') }}"></script>
+</body>
+</html>

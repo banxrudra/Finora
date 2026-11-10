@@ -1,0 +1,47 @@
+{% extends "base.html" %}
+{% from "partials/macros.html" import icon, brand_mark %}
+{% block body %}
+<div class="auth">
+  <section class="auth-form-side">
+    <a class="auth-brand" href="{{ url_for('auth.login') }}">
+      {{ brand_mark() }}
+      <div>
+        <div class="brand-name">Finora</div>
+        <div class="brand-sub" style="color:var(--text-3)">Finance &amp; Expense Analytics</div>
+      </div>
+    </a>
+    <div class="auth-card">
+      {% block form %}{% endblock %}
+    </div>
+    <div class="auth-foot">© {{ today.year }} Finora · Your data stays on your own server.</div>
+  </section>
+
+  <section class="auth-visual" aria-hidden="true">
+    <h2>Every rupee, accounted for — and understood.</h2>
+    <p>Track income and expenses, set budgets that actually warn you, and see where your money goes with clear analytics.</p>
+    <div class="mock">
+      <div class="mock-card">
+        <div class="l">Total balance</div>
+        <div class="v">₹4,82,350.00</div>
+        <div class="d">↑ 12.4% vs last month</div>
+        <div class="mock-bars">
+          <span style="height:42%"></span><span style="height:58%"></span><span style="height:36%"></span>
+          <span style="height:70%"></span><span style="height:52%"></span><span class="hi" style="height:88%"></span>
+        </div>
+      </div>
+      <div class="mock-card">
+        <div class="l">Spending by category</div>
+        <div class="mock-ring"></div>
+      </div>
+      <div class="mock-card" style="grid-column: 1 / -1">
+        <div class="mock-row"><span class="ic" style="background:rgba(235,104,52,.18);color:#f08a5d">{{ icon('utensils') }}</span>Swiggy order<b>−₹642.00</b></div>
+        <div class="mock-row"><span class="ic" style="background:rgba(27,175,122,.18);color:#34d399">{{ icon('briefcase') }}</span>Salary – Northwind Labs<b style="color:#34d399">+₹92,400.00</b></div>
+      </div>
+    </div>
+    <div class="auth-points">
+      <span>{{ icon('shield-check') }} Hashed passwords &amp; CSRF protection</span>
+      <span>{{ icon('chart-pie') }} Real-time analytics</span>
+    </div>
+  </section>
+</div>
+{% endblock %}

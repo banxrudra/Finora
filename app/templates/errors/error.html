@@ -1,0 +1,13 @@
+{% extends "base.html" %}
+{% from "partials/macros.html" import icon %}
+{% block title %}{{ title }}{% endblock %}
+{% block body %}
+<div class="error-page">
+  <div>
+    <div class="code">{{ code }}</div>
+    <h1>{{ title }}</h1>
+    <p>{{ message }}</p>
+    <a class="btn btn-primary" href="{{ url_for('main.index') }}">{{ icon('arrow-left') }} Back to Finora</a>
+  </div>
+</div>
+{% endblock %}

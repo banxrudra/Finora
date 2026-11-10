@@ -1,0 +1,167 @@
+{% extends "base.html" %}
+{% from "partials/macros.html" import icon, cat_icon, method_icon %}
+{% block title %}Transactions{% endblock %}
+{% block topbar_range %}{% endblock %}
+
+{% macro sort_link(field, label) -%}
+{%- set desc = field ~ '_desc' -%}{%- set asc = field ~ '_asc' -%}
+{%- set next = asc if f.sort == desc else desc -%}
+<a class="th-sort" href="{{ url_for('transactions.index', **dict(args, sort=next)) }}">{{ label }}
+  {%- if f.sort == desc %}{{ icon('arrow-down') }}{% elif f.sort == asc %}{{ icon('arrow-up') }}{% else %}{{ icon('arrow-up-down') }}{% endif -%}
+</a>
+{%- endmacro %}
+
+{% block content %}
+<div class="page-head">
+  <div>
+    <h1>Transactions</h1>
+    <p>{{ pagination.total }} transaction{{ 's' if pagination.total != 1 }}{% if args %} match your filters{% else %} recorded{% endif %} · manage your income and expenses</p>
+  </div>
+  <div class="page-head__actions">
+    <a class="btn btn-secondary" href="{{ url_for('transactions.export', **args) }}">{{ icon('download') }} Export CSV</a>
+    <button class="btn btn-primary" data-modal-open="tx-modal" data-title="Add transaction">{{ icon('plus') }} Add transaction</button>
+  </div>
+</div>
+
+<section class="grid grid-3" style="margin-bottom:18px">
+  <div class="card summary-tile">
+    <span class="kpi-icon green">{{ icon('arrow-down-left') }}</span>
+    <div><div class="label">Income</div><div class="value">{{ totals.income|money }}</div></div>
+  </div>
+  <div class="card summary-tile">
+    <span class="kpi-icon orange">{{ icon('arrow-up-right') }}</span>
+    <div><div class="label">Expenses</div><div class="value">{{ totals.expense|money }}</div></div>
+  </div>
+  <div class="card summary-tile">
+    <span class="kpi-icon blue">{{ icon('scale') }}</span>
+    <div><div class="label">Net</div><div class="value" style="color: {{ 'var(--pos)' if totals.net >= 0 else 'var(--neg)' }}">{{ totals.net|money(sign=true) }}</div></div>
+  </div>
+</section>
+
+<article class="card" style="overflow:hidden">
+  <form method="get" action="{{ url_for('transactions.index') }}" role="search">
+    <div class="toolbar">
+      <div class="input-icon search">
+        {{ icon('search') }}
+        <input class="input" type="search" name="q" value="{{ f.q }}" placeholder="Search title or notes…" aria-label="Search transactions" data-search>
+      </div>
+      <div class="segmented" role="radiogroup" aria-label="Type">
+        <input type="radio" name="kind" value="" id="k-all" {{ 'checked' if not f.kind }} data-autosubmit><label for="k-all">All</label>
+        <input type="radio" name="kind" value="income" id="k-in" {{ 'checked' if f.kind == 'income' }} data-autosubmit><label for="k-in">Income</label>
+        <input type="radio" name="kind" value="expense" id="k-ex" {{ 'checked' if f.kind == 'expense' }} data-autosubmit><label for="k-ex">Expenses</label>
+      </div>
+      <div class="spacer"></div>
+      <select class="select" name="sort" aria-label="Sort" style="width:auto" data-autosubmit>
+        <option value="date_desc" {{ 'selected' if f.sort == 'date_desc' }}>Newest first</option>
+        <option value="date_asc" {{ 'selected' if f.sort == 'date_asc' }}>Oldest first</option>
+        <option value="amount_desc" {{ 'selected' if f.sort == 'amount_desc' }}>Highest amount</option>
+        <option value="amount_asc" {{ 'selected' if f.sort == 'amount_asc' }}>Lowest amount</option>
+      </select>
+      <button type="button" class="btn btn-secondary" data-toggle="filter-panel" aria-expanded="{{ 'true' if active_filters else 'false' }}" aria-controls="filter-panel">
+        {{ icon('sliders-horizontal') }} Filters{% if active_filters %} <span class="filter-count">{{ active_filters }}</span>{% endif %}
+      </button>
+    </div>
+    <div class="filters" id="filter-panel" {{ 'hidden' if not active_filters }}>
+      <div class="field">
+        <label class="label" for="f-cat">Category</label>
+        <select class="select" id="f-cat" name="category">
+          <option value="">All categories</option>
+          <optgroup label="Expense">{% for c in categories if c.kind == 'expense' %}<option value="{{ c.id }}" {{ 'selected' if f.category == c.id }}>{{ c.name }}</option>{% endfor %}</optgroup>
+          <optgroup label="Income">{% for c in categories if c.kind == 'income' %}<option value="{{ c.id }}" {{ 'selected' if f.category == c.id }}>{{ c.name }}</option>{% endfor %}</optgroup>
+        </select>
+      </div>
+      <div class="field">
+        <label class="label" for="f-method">Payment method</label>
+        <select class="select" id="f-method" name="method">
+          <option value="">All methods</option>
+          {% for m in methods %}<option value="{{ m }}" {{ 'selected' if f.method == m }}>{{ m }}</option>{% endfor %}
+        </select>
+      </div>
+      <div class="field">
+        <label class="label" for="f-start">From</label>
+        <input class="input" id="f-start" type="date" name="start" value="{{ f.start.isoformat() if f.start else '' }}">
+      </div>
+      <div class="field">
+        <label class="label" for="f-end">To</label>
+        <input class="input" id="f-end" type="date" name="end" value="{{ f.end.isoformat() if f.end else '' }}">
+      </div>
+      <div class="field" style="flex-direction:row;gap:8px">
+        <button class="btn btn-primary" type="submit" style="flex:1">Apply</button>
+        <a class="btn btn-ghost" href="{{ url_for('transactions.index') }}">Reset</a>
+      </div>
+    </div>
+  </form>
+
+  {% if args %}
+  <div class="chips">
+    {% set labels = {'q': 'Search', 'kind': 'Type', 'category': 'Category', 'method': 'Method', 'start': 'From', 'end': 'To', 'sort': 'Sort'} %}
+    {% for k, v in args.items() if k != 'sort' %}
+      {% set shown = cat_lookup[v|int].name if k == 'category' and (v|int) in cat_lookup else v %}
+      <span class="chip">{{ labels.get(k, k) }}: <strong>{{ shown|title if k == 'kind' else shown }}</strong>
+        <a href="{{ url_for('transactions.index', **dict(args|dictsort|rejectattr('0', 'equalto', k))) }}" aria-label="Remove {{ labels.get(k, k) }} filter">{{ icon('x') }}</a></span>
+    {% endfor %}
+  </div>
+  {% endif %}
+
+  {% if pagination.items %}
+  <div class="table-wrap">
+    <table class="table table-stack">
+      <thead>
+        <tr>
+          <th>Transaction</th>
+          <th>Category</th>
+          <th>{{ sort_link('date', 'Date') }}</th>
+          <th>Method</th>
+          <th>Type</th>
+          <th class="t-right">{{ sort_link('amount', 'Amount') }}</th>
+          <th class="t-right"><span class="sr-only">Actions</span></th>
+        </tr>
+      </thead>
+      <tbody>
+      {% for t in pagination.items %}
+        <tr>
+          <td class="c-main"><div class="tx-cell">{{ cat_icon(t.category) }}<div style="min-width:0"><div class="tx-title">{{ t.title }}</div><div class="tx-sub">{{ t.notes or (t.kind|title ~ ' · ' ~ t.method) }}</div></div></div></td>
+          <td class="c-cat"><span class="cat-tag"><span class="swatch" style="--c: {{ t.category.color if t.category else '#94a3b8' }}"></span>{{ t.category.name if t.category else 'Uncategorised' }}</span></td>
+          <td class="c-date t-muted">{{ t.date|dt }}</td>
+          <td class="c-method"><span class="method">{{ method_icon(t.method) }}{{ t.method }}</span></td>
+          <td class="c-status">{% if t.kind == 'income' %}<span class="badge badge-pos">{{ icon('arrow-down-left') }}Income</span>{% else %}<span class="badge badge-neutral">{{ icon('arrow-up-right') }}Expense</span>{% endif %}</td>
+          <td class="c-meta">{{ t.category.name if t.category else 'Uncategorised' }} · {{ t.date|dt('%d %b %Y') }} · {{ t.method }}</td>
+          <td class="c-amount t-right"><span class="amount {{ 'amount-pos' if t.kind == 'income' else 'amount-neg' }}">{{ t.signed_amount|money(sign=true) }}</span></td>
+          <td class="c-actions">
+            <div class="row-actions">
+              <button class="icon-btn icon-btn-sm" data-modal-open="tx-modal" data-title="Edit transaction"
+                      data-action="{{ url_for('transactions.update', tid=t.id) }}" data-payload='{{ t.to_dict()|tojson_safe }}' aria-label="Edit {{ t.title }}">{{ icon('pencil') }}</button>
+              <button class="icon-btn icon-btn-sm" data-confirm="{{ url_for('transactions.delete', tid=t.id) }}"
+                      data-confirm-title="Delete transaction?" data-confirm-text="“{{ t.title }}” ({{ t.amount|money }}) will be permanently removed." aria-label="Delete {{ t.title }}">{{ icon('trash-2') }}</button>
+            </div>
+          </td>
+        </tr>
+      {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  <div class="card-foot">
+    <span class="small muted">Showing <strong class="text-2">{{ (pagination.page - 1) * pagination.per_page + 1 }}–{{ (pagination.page - 1) * pagination.per_page + pagination.items|length }}</strong> of <strong class="text-2">{{ pagination.total }}</strong></span>
+    <nav class="pagination" aria-label="Pagination">
+      <a class="page-link{{ ' is-disabled' if not pagination.has_prev }}" href="{{ url_for('transactions.index', page=pagination.prev_num, **args) if pagination.has_prev else '#' }}" aria-label="Previous page">{{ icon('chevron-left') }}</a>
+      {% for p in pagination.iter_pages(left_edge=1, left_current=1, right_current=1, right_edge=1) %}
+        {% if p %}<a class="page-link{{ ' is-active' if p == pagination.page }}" href="{{ url_for('transactions.index', page=p, **args) }}"{% if p == pagination.page %} aria-current="page"{% endif %}>{{ p }}</a>
+        {% else %}<span class="page-link is-disabled">…</span>{% endif %}
+      {% endfor %}
+      <a class="page-link{{ ' is-disabled' if not pagination.has_next }}" href="{{ url_for('transactions.index', page=pagination.next_num, **args) if pagination.has_next else '#' }}" aria-label="Next page">{{ icon('chevron-right') }}</a>
+    </nav>
+  </div>
+  {% else %}
+  <div class="empty">
+    <div class="empty-icon">{{ icon('search-x' if args else 'receipt') }}</div>
+    {% if args %}
+      <h3>No matching transactions</h3><p>Try a different search term or clear some filters.</p>
+      <div class="empty-actions"><a class="btn btn-secondary" href="{{ url_for('transactions.index') }}">Clear filters</a></div>
+    {% else %}
+      <h3>No transactions yet</h3><p>Record your first income or expense to start building insights.</p>
+      <div class="empty-actions"><button class="btn btn-primary" data-modal-open="tx-modal" data-title="Add transaction">{{ icon('plus') }} Add transaction</button></div>
+    {% endif %}
+  </div>
+  {% endif %}
+</article>
+{% endblock %}

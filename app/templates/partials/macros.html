@@ -1,0 +1,41 @@
+{% macro icon(name, cls="") -%}
+<i data-lucide="{{ name }}"{% if cls %} class="{{ cls }}"{% endif %} aria-hidden="true"></i>
+{%- endmacro %}
+
+{% macro brand_mark() -%}
+<span class="brand-mark" aria-hidden="true">
+  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M5 19V9.5"/><path d="M12 19V5"/><path d="M19 19v-6"/>
+  </svg>
+</span>
+{%- endmacro %}
+
+{% macro cat_icon(category, size="") -%}
+{%- if category -%}
+<span class="cat-icon {{ size }}" style="--c: {{ category.color }}">{{ icon(category.icon) }}</span>
+{%- else -%}
+<span class="cat-icon {{ size }}" style="--c: #94a3b8">{{ icon('tag') }}</span>
+{%- endif -%}
+{%- endmacro %}
+
+{% macro delta(value, invert=false, suffix="") -%}
+{%- if value is none -%}
+<span class="delta delta-flat">—</span>
+{%- else -%}
+{%- set good = (value >= 0) != invert -%}
+<span class="delta {{ 'delta-flat' if value == 0 else ('delta-up' if good else 'delta-down') }}" title="vs previous period">
+  {{ icon('trending-up' if value >= 0 else 'trending-down') }}{{ '%.1f'|format(value|abs) }}%{{ suffix }}
+</span>
+{%- endif -%}
+{%- endmacro %}
+
+{% macro method_icon(method) -%}
+{%- set m = {'UPI': 'smartphone', 'Debit Card': 'credit-card', 'Credit Card': 'credit-card', 'Net Banking': 'landmark', 'Cash': 'banknote', 'Wallet': 'wallet', 'Bank Transfer': 'arrow-left-right'} -%}
+{{ icon(m.get(method, 'circle-dollar-sign')) }}
+{%- endmacro %}
+
+{% macro money_split(value) -%}
+{%- set s = value|money -%}
+{%- set parts = s.rsplit('.', 1) -%}
+{{ parts[0] }}<span class="cents">.{{ parts[1] }}</span>
+{%- endmacro %}

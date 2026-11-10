@@ -1,0 +1,61 @@
+{% from "partials/macros.html" import icon, brand_mark %}
+{% set ep = request.endpoint or '' %}
+{% set nav = [
+  ('Overview', [
+    ('main.dashboard', 'Dashboard', 'layout-dashboard'),
+    ('transactions.index', 'Transactions', 'arrow-left-right'),
+    ('budgets.index', 'Budgets', 'target'),
+    ('categories.index', 'Categories', 'shapes'),
+  ]),
+  ('Insights', [
+    ('analytics.index', 'Analytics', 'chart-column'),
+    ('reports.index', 'Reports', 'file-text'),
+  ]),
+  ('Account', [
+    ('settings.index', 'Settings', 'settings'),
+  ]),
+] %}
+{% set alerts = notifications|selectattr('href', 'equalto', 'budgets')|selectattr('tone', 'equalto', 'critical')|list %}
+<aside class="sidebar" id="sidebar" aria-label="Primary">
+  <div class="sidebar__brand">
+    {{ brand_mark() }}
+    <div>
+      <div class="brand-name">Finora</div>
+      <div class="brand-sub">Finance &amp; Expense Analytics</div>
+    </div>
+    <button class="sidebar__close" data-nav-close aria-label="Close menu">{{ icon('x') }}</button>
+  </div>
+
+  <nav class="sidebar__nav">
+    {% for section, items in nav %}
+      <div class="nav-label">{{ section }}</div>
+      {% for endpoint, label, ic in items %}
+        {% set active = ep.split('.')[0] == endpoint.split('.')[0] %}
+        <a href="{{ url_for(endpoint) }}" class="nav-link{{ ' is-active' if active }}"{% if active %} aria-current="page"{% endif %}>
+          {{ icon(ic) }}<span>{{ label }}</span>
+          {% if endpoint == 'budgets.index' and alerts %}<span class="nav-badge" title="Budgets exceeded">{{ alerts|length }}</span>{% endif %}
+        </a>
+      {% endfor %}
+    {% endfor %}
+  </nav>
+
+  {% if side_budget %}
+  <a class="sidebar__promo" href="{{ url_for('budgets.index') }}">
+    <div class="sidebar__promo-title">{{ icon('wallet', 'icon-sm') }} Monthly budget</div>
+    <div class="sidebar__promo-text">{{ side_budget.spent|money(false) }} of {{ side_budget.amount|money(false) }} used</div>
+    <div class="meter meter-sm {{ 'is-over' if side_budget.status == 'over' else ('is-warning' if side_budget.status == 'warning') }}"><span style="width: {{ side_budget.bar_pct }}%"></span></div>
+  </a>
+  {% endif %}
+
+  <div class="sidebar__profile">
+    <span class="avatar avatar-sm">{{ current_user.initials }}</span>
+    <div class="sidebar__profile-meta">
+      <div class="sidebar__profile-name">{{ current_user.name }}</div>
+      <div class="sidebar__profile-mail">{{ current_user.email }}</div>
+    </div>
+    <form method="post" action="{{ url_for('auth.logout') }}">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <button class="sidebar__logout" type="submit" aria-label="Sign out" title="Sign out">{{ icon('log-out', 'icon-sm') }}</button>
+    </form>
+  </div>
+</aside>
